@@ -18,6 +18,13 @@
 	"observability": {
 		"enabled": true
 	},
+    "workflows": [
+        {
+            "name": "main-workflow",
+            "binding": "main-workflow",
+            "class_name": "MyWorkflow"
+        }
+    ],
 	"ai": {
 		"binding": "AI"
 	},
