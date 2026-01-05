@@ -48,6 +48,12 @@ sendButton.addEventListener("click", sendMessage);
 async function sendMessage() {
 	const message = userInput.value.trim();
 	const selectedFiles = Array.from(userFileInput.files);
+	const imageAttachments = selectedFiles
+		.filter((file) => file.type.startsWith("image/"))
+		.map((file) => ({
+			type: "image",
+			file,
+		}));
 
 	// Don't send empty messages
 	if (message === "" || isProcessing) return;
@@ -61,8 +67,8 @@ async function sendMessage() {
 	userInput.disabled = true;
 	sendButton.disabled = true;
 
-	// Add user message to chat
-	addMessageToChat("user", message);
+	// Add user message to chat (with attachments, if any)
+	addMessageToChat("user", message, imageAttachments);
 
 	// Clear input
 	userInput.value = "";
@@ -212,10 +218,41 @@ async function sendMessage() {
 /**
  * Helper function to add message to chat
  */
-function addMessageToChat(role, content) {
+function addMessageToChat(role, content, attachments = []) {
 	const messageEl = document.createElement("div");
 	messageEl.className = `message ${role}-message`;
-	messageEl.innerHTML = `<p>${content}</p>`;
+
+	if (attachments.length > 0) {
+		const attachmentsEl = document.createElement("div");
+		attachmentsEl.className = "message-attachments";
+		for (const attachment of attachments) {
+			if (attachment.type === "image") {
+				const wrapper = document.createElement("div");
+				wrapper.className = "attachment-image";
+
+				const img = document.createElement("img");
+				let objectUrl;
+				if (attachment.file instanceof File) {
+					objectUrl = URL.createObjectURL(attachment.file);
+					img.onload = () => URL.revokeObjectURL(objectUrl);
+					img.src = objectUrl;
+				} else if (typeof attachment.url === "string") {
+					img.src = attachment.url;
+				}
+				img.alt = attachment.file?.name ?? "Uploaded image";
+
+				wrapper.appendChild(img);
+				attachmentsEl.appendChild(wrapper);
+			}
+		}
+		messageEl.appendChild(attachmentsEl);
+	}
+
+	if (content) {
+		const textEl = document.createElement("p");
+		textEl.textContent = content;
+		messageEl.appendChild(textEl);
+	}
 	chatMessages.appendChild(messageEl);
 
 	// Scroll to bottom

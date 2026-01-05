@@ -192,6 +192,27 @@
 				white-space: nowrap;
 			}
 
+			.message-attachments {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.5rem;
+				margin-bottom: 0.5rem;
+			}
+
+			.attachment-image {
+				width: 140px;
+				height: 140px;
+				border-radius: 8px;
+				overflow: hidden;
+				border: 1px solid var(--border-color);
+			}
+
+			.attachment-image img {
+				width: 100%;
+				height: 100%;
+				object-fit: cover;
+			}
+
 			.typing-indicator {
 				display: none;
 				font-style: italic;
