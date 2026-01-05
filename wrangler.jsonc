@@ -7,7 +7,10 @@
 	"name": "cf-ai-eventifyit",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-10-08",
-	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
 	"assets": {
 		"binding": "ASSETS",
 		"directory": "./public"
@@ -18,5 +21,27 @@
 	"ai": {
 		"binding": "AI"
 	},
-	"upload_source_maps": true
+	"upload_source_maps": true,
+	"d1_databases": [
+		{
+			"binding": "eventifyit_db",
+			"database_name": "eventifyit-db",
+			"database_id": "f5bbaed3-4519-49d6-9e45-d011dfb2a8ff",
+			"remote": true
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "SESSION_KV",
+			"id": "d71a80cf8af643beb3bc35bf6fffd029",
+			"remote": true
+		}
+	],
+	"r2_buckets": [
+		{
+			"bucket_name": "eventifyit-images",
+			"binding": "eventifyit_images",
+			"remote": true
+		}
+	]
 }
