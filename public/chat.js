@@ -91,16 +91,31 @@ async function sendMessage() {
 		// Scroll to bottom
 		chatMessages.scrollTop = chatMessages.scrollHeight;
 
+		let fetchOptions;
+		if (selectedFiles.length > 0) {
+			const formData = new FormData();
+			formData.append("messages", JSON.stringify(chatHistory));
+			selectedFiles.forEach((file, index) => {
+				formData.append(`file${index}`, file);
+			});
+			fetchOptions = {
+				method: "POST",
+				body: formData,
+			};
+		} else {
+			fetchOptions = {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					messages: chatHistory,
+				}),
+			};
+		}
+
 		// Send request to API
-		const response = await fetch("/api/chat", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				messages: chatHistory,
-			}),
-		});
+		const response = await fetch("/api/chat", fetchOptions);
 
 		// Handle errors
 		if (!response.ok) {

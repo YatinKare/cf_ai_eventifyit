@@ -57,10 +57,12 @@ async function handleChatRequest(
 	env: Env,
 ): Promise<Response> {
 	try {
-		// Parse JSON request body
-		const { messages = [] } = (await request.json()) as {
-			messages: ChatMessage[];
-		};
+		const { messages: incomingMessages, uploadedFileNames } =
+			await parseChatRequestPayload(request);
+		const messages = [...incomingMessages];
+		if (uploadedFileNames.length > 0) {
+			console.log("Received files from frontend:", uploadedFileNames);
+		}
 
 		// Add system prompt if not present
 		if (!messages.some((msg) => msg.role === "system")) {
@@ -101,4 +103,51 @@ async function handleChatRequest(
 			},
 		);
 	}
+}
+
+async function parseChatRequestPayload(
+	request: Request,
+): Promise<{ messages: ChatMessage[]; uploadedFileNames: string[] }> {
+	const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+	if (contentType.includes("multipart/form-data")) {
+		const formData = await request.formData();
+		const formMessages = parseMessagesPayload(formData.get("messages"));
+		const uploadedFileNames: string[] = [];
+		for (const [, value] of formData.entries()) {
+			if (value instanceof File && value.name) {
+				uploadedFileNames.push(value.name);
+			}
+		}
+		return { messages: formMessages, uploadedFileNames };
+	}
+
+	if (contentType.includes("application/json") || contentType === "") {
+		try {
+			const { messages = [] } = (await request.json()) as {
+				messages?: ChatMessage[];
+			};
+			return {
+				messages: Array.isArray(messages) ? messages : [],
+				uploadedFileNames: [],
+			};
+		} catch (error) {
+			console.error("Failed to parse JSON request body:", error);
+			return { messages: [], uploadedFileNames: [] };
+		}
+	}
+
+	return { messages: [], uploadedFileNames: [] };
+}
+
+function parseMessagesPayload(rawValue: FormDataEntryValue | null): ChatMessage[] {
+	if (typeof rawValue === "string") {
+		try {
+			const parsed = JSON.parse(rawValue);
+			return Array.isArray(parsed) ? (parsed as ChatMessage[]) : [];
+		} catch (error) {
+			console.error("Failed to parse messages field from form data:", error);
+			return [];
+		}
+	}
+	return [];
 }
