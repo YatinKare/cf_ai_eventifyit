@@ -9,6 +9,7 @@ const chatMessages = document.getElementById("chat-messages");
 const userInput = document.getElementById("user-input");
 const userFileInput = document.getElementById("upload");
 const sendButton = document.getElementById("send-button");
+const filePreview = document.getElementById("file-preview");
 const typingIndicator = document.getElementById("typing-indicator");
 
 // Chat state
@@ -20,6 +21,9 @@ let chatHistory = [
 	},
 ];
 let isProcessing = false;
+let previewUrls = [];
+
+userFileInput.addEventListener("change", handleFileSelection);
 
 // Auto-resize textarea as user types
 userInput.addEventListener("input", function () {
@@ -42,11 +46,15 @@ sendButton.addEventListener("click", sendMessage);
  * Sends a message to the chat API and processes the response
  */
 async function sendMessage() {
-    console.log(userFileInput.files);
 	const message = userInput.value.trim();
+	const selectedFiles = Array.from(userFileInput.files);
 
 	// Don't send empty messages
 	if (message === "" || isProcessing) return;
+
+	if (selectedFiles.length > 0) {
+		console.log("Selected image files ready to send:", selectedFiles);
+	}
 
 	// Disable input while processing
 	isProcessing = true;
@@ -195,6 +203,10 @@ async function sendMessage() {
 		sendButton.disabled = false;
 		userInput.focus();
 	}
+
+	if (selectedFiles.length > 0) {
+		clearFileSelection();
+	}
 }
 
 /**
@@ -229,4 +241,46 @@ function consumeSseEvents(buffer) {
 		events.push(dataLines.join("\n"));
 	}
 	return { events, buffer: normalized };
+}
+
+function handleFileSelection() {
+	clearPreview();
+	const files = Array.from(userFileInput.files).filter((file) =>
+		file.type.startsWith("image/"),
+	);
+	if (files.length === 0) {
+		return;
+	}
+
+	filePreview.classList.add("visible");
+	for (const file of files) {
+		const previewItem = document.createElement("div");
+		previewItem.className = "preview-item";
+
+		const objectUrl = URL.createObjectURL(file);
+		previewUrls.push(objectUrl);
+
+		const img = document.createElement("img");
+		img.src = objectUrl;
+		img.alt = file.name;
+
+		const caption = document.createElement("span");
+		caption.textContent = file.name;
+
+		previewItem.appendChild(img);
+		previewItem.appendChild(caption);
+		filePreview.appendChild(previewItem);
+	}
+}
+
+function clearPreview() {
+	filePreview.innerHTML = "";
+	previewUrls.forEach((url) => URL.revokeObjectURL(url));
+	previewUrls = [];
+	filePreview.classList.remove("visible");
+}
+
+function clearFileSelection() {
+	userFileInput.value = "";
+	clearPreview();
 }
