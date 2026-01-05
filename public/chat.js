@@ -7,6 +7,7 @@
 // DOM elements
 const chatMessages = document.getElementById("chat-messages");
 const userInput = document.getElementById("user-input");
+const userFileInput = document.getElementById("upload");
 const sendButton = document.getElementById("send-button");
 const typingIndicator = document.getElementById("typing-indicator");
 
@@ -41,6 +42,7 @@ sendButton.addEventListener("click", sendMessage);
  * Sends a message to the chat API and processes the response
  */
 async function sendMessage() {
+    console.log(userFileInput.files);
 	const message = userInput.value.trim();
 
 	// Don't send empty messages

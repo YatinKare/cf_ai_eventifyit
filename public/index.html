@@ -114,6 +114,17 @@
 				transition: background-color 0.2s;
 			}
 
+            #upload {
+				margin-left: 0.5rem;
+				padding: 0 1rem;
+				background-color: var(--primary-color);
+				color: white;
+				border: none;
+				border-radius: 4px;
+				cursor: pointer;
+				transition: background-color 0.2s;
+            }
+
 			#send-button:hover {
 				background-color: var(--primary-hover);
 			}
@@ -170,6 +181,7 @@
 					autofocus
 				></textarea>
 				<button id="send-button">Send</button>
+				<input type="file" name="file" id="upload" multiple/>
 			</div>
 		</div>
 
