@@ -33,6 +33,7 @@ This template demonstrates how to build an AI-powered chat interface using Cloud
 - [Node.js](https://nodejs.org/) (v18 or newer)
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
 - A Cloudflare account with Workers AI access
+- A Google Cloud account for OAuth and Calendar API access
 
 ### Installation
 
@@ -54,6 +55,78 @@ This template demonstrates how to build an AI-powered chat interface using Cloud
    npm run cf-typegen
    ```
 
+### Cloudflare Resources Setup
+
+Create the required Cloudflare resources:
+
+1. **Create KV Namespace** (for session storage):
+   ```bash
+   npx wrangler kv:namespace create SESSION_KV
+   ```
+   Copy the ID and update `wrangler.jsonc` → `kv_namespaces[0].id`
+
+2. **Create D1 Database** (for storing tokens and events):
+   ```bash
+   npx wrangler d1 create eventifyit-db
+   ```
+   Copy the database ID and update `wrangler.jsonc` → `d1_databases[0].database_id`
+
+3. **Create R2 Bucket** (for image storage):
+   ```bash
+   npx wrangler r2 bucket create eventifyit-images
+   ```
+
+4. **Update Compatibility Date** in `wrangler.jsonc`:
+   - Ensure `compatibility_date` is set to `"2024-04-03"` or later (required for Workflows RPC)
+
+### Google Cloud Console Setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Enable the following APIs:
+   - **Google Calendar API**
+   - **People API** (for user info)
+
+4. Configure OAuth Consent Screen:
+   - Navigate to **APIs & Services** → **OAuth consent screen**
+   - Choose **External** user type
+   - Fill in app name, user support email, and developer email
+   - Add these scopes:
+     - `https://www.googleapis.com/auth/calendar.events`
+     - `https://www.googleapis.com/auth/userinfo.profile`
+     - `https://www.googleapis.com/auth/userinfo.email`
+
+5. Create OAuth 2.0 Credentials:
+   - Go to **APIs & Services** → **Credentials**
+   - Click **Create Credentials** → **OAuth client ID**
+   - Application type: **Web application**
+   - Add **Authorized redirect URI**:
+     - For local dev: `http://localhost:8787/api/auth/google/callback`
+     - For production: `https://your-worker.workers.dev/api/auth/google/callback`
+   - Copy the **Client ID** and **Client Secret**
+
+6. Update `wrangler.jsonc`:
+   - Set `vars.GOOGLE_CLIENT_ID` to your Client ID
+
+### Local Development Secrets
+
+Create a `.dev.vars` file in the project root:
+
+```bash
+# .dev.vars (already in .gitignore)
+GOOGLE_CLIENT_SECRET=your_client_secret_here
+```
+
+Replace `your_client_secret_here` with the Client Secret from Google Cloud Console.
+
+### Database Setup
+
+Initialize the D1 database schema (if schema.sql exists):
+
+```bash
+npx wrangler d1 execute eventifyit-db --file=./schema.sql
+```
+
 ### Development
 
 Start a local development server:
@@ -64,6 +137,12 @@ npm run dev
 
 This will start a local server at http://localhost:8787.
 
+**First-time setup:**
+1. Visit http://localhost:8787
+2. Click "Sign in with Google"
+3. Complete the OAuth flow
+4. You're ready to upload event images!
+
 Note: Using Workers AI accesses your Cloudflare account even during local development, which will incur usage charges.
 
 ### Deployment
@@ -72,6 +151,12 @@ Deploy to Cloudflare Workers:
 
 ```bash
 npm run deploy
+```
+
+**Important:** Don't forget to set production secrets:
+
+```bash
+npx wrangler secret put GOOGLE_CLIENT_SECRET
 ```
 
 ### Monitor
