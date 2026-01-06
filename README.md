@@ -2,6 +2,8 @@
 
 An Image-to-Google Calendar event/task parser using an AI chat, built on Cloudflare.
 
+This project uses the [LLM Chat Application Template](https://github.com/cloudflare/llm-chat-app-template).
+
 <!-- dash-content-start -->
 
 ## Background
