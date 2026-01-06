@@ -7,7 +7,9 @@
 // DOM elements
 const chatMessages = document.getElementById("chat-messages");
 const userInput = document.getElementById("user-input");
+const userFileInput = document.getElementById("upload");
 const sendButton = document.getElementById("send-button");
+const filePreview = document.getElementById("file-preview");
 const typingIndicator = document.getElementById("typing-indicator");
 
 // Chat state
@@ -19,6 +21,9 @@ let chatHistory = [
 	},
 ];
 let isProcessing = false;
+let previewUrls = [];
+
+userFileInput.addEventListener("change", handleFileSelection);
 
 // Auto-resize textarea as user types
 userInput.addEventListener("input", function () {
@@ -42,17 +47,28 @@ sendButton.addEventListener("click", sendMessage);
  */
 async function sendMessage() {
 	const message = userInput.value.trim();
+	const selectedFiles = Array.from(userFileInput.files);
+	const imageAttachments = selectedFiles
+		.filter((file) => file.type.startsWith("image/"))
+		.map((file) => ({
+			type: "image",
+			file,
+		}));
 
 	// Don't send empty messages
 	if (message === "" || isProcessing) return;
+
+	if (selectedFiles.length > 0) {
+		console.log("Selected image files ready to send:", selectedFiles);
+	}
 
 	// Disable input while processing
 	isProcessing = true;
 	userInput.disabled = true;
 	sendButton.disabled = true;
 
-	// Add user message to chat
-	addMessageToChat("user", message);
+	// Add user message to chat (with attachments, if any)
+	addMessageToChat("user", message, imageAttachments);
 
 	// Clear input
 	userInput.value = "";
@@ -75,16 +91,31 @@ async function sendMessage() {
 		// Scroll to bottom
 		chatMessages.scrollTop = chatMessages.scrollHeight;
 
+		let fetchOptions;
+		if (selectedFiles.length > 0) {
+			const formData = new FormData();
+			formData.append("messages", JSON.stringify(chatHistory));
+			selectedFiles.forEach((file, index) => {
+				formData.append(`file${index}`, file);
+			});
+			fetchOptions = {
+				method: "POST",
+				body: formData,
+			};
+		} else {
+			fetchOptions = {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					messages: chatHistory,
+				}),
+			};
+		}
+
 		// Send request to API
-		const response = await fetch("/api/chat", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				messages: chatHistory,
-			}),
-		});
+		const response = await fetch("/api/chat", fetchOptions);
 
 		// Handle errors
 		if (!response.ok) {
@@ -193,15 +224,50 @@ async function sendMessage() {
 		sendButton.disabled = false;
 		userInput.focus();
 	}
+
+	if (selectedFiles.length > 0) {
+		clearFileSelection();
+	}
 }
 
 /**
  * Helper function to add message to chat
  */
-function addMessageToChat(role, content) {
+function addMessageToChat(role, content, attachments = []) {
 	const messageEl = document.createElement("div");
 	messageEl.className = `message ${role}-message`;
-	messageEl.innerHTML = `<p>${content}</p>`;
+
+	if (attachments.length > 0) {
+		const attachmentsEl = document.createElement("div");
+		attachmentsEl.className = "message-attachments";
+		for (const attachment of attachments) {
+			if (attachment.type === "image") {
+				const wrapper = document.createElement("div");
+				wrapper.className = "attachment-image";
+
+				const img = document.createElement("img");
+				let objectUrl;
+				if (attachment.file instanceof File) {
+					objectUrl = URL.createObjectURL(attachment.file);
+					img.onload = () => URL.revokeObjectURL(objectUrl);
+					img.src = objectUrl;
+				} else if (typeof attachment.url === "string") {
+					img.src = attachment.url;
+				}
+				img.alt = attachment.file?.name ?? "Uploaded image";
+
+				wrapper.appendChild(img);
+				attachmentsEl.appendChild(wrapper);
+			}
+		}
+		messageEl.appendChild(attachmentsEl);
+	}
+
+	if (content) {
+		const textEl = document.createElement("p");
+		textEl.textContent = content;
+		messageEl.appendChild(textEl);
+	}
 	chatMessages.appendChild(messageEl);
 
 	// Scroll to bottom
@@ -227,4 +293,46 @@ function consumeSseEvents(buffer) {
 		events.push(dataLines.join("\n"));
 	}
 	return { events, buffer: normalized };
+}
+
+function handleFileSelection() {
+	clearPreview();
+	const files = Array.from(userFileInput.files).filter((file) =>
+		file.type.startsWith("image/"),
+	);
+	if (files.length === 0) {
+		return;
+	}
+
+	filePreview.classList.add("visible");
+	for (const file of files) {
+		const previewItem = document.createElement("div");
+		previewItem.className = "preview-item";
+
+		const objectUrl = URL.createObjectURL(file);
+		previewUrls.push(objectUrl);
+
+		const img = document.createElement("img");
+		img.src = objectUrl;
+		img.alt = file.name;
+
+		const caption = document.createElement("span");
+		caption.textContent = file.name;
+
+		previewItem.appendChild(img);
+		previewItem.appendChild(caption);
+		filePreview.appendChild(previewItem);
+	}
+}
+
+function clearPreview() {
+	filePreview.innerHTML = "";
+	previewUrls.forEach((url) => URL.revokeObjectURL(url));
+	previewUrls = [];
+	filePreview.classList.remove("visible");
+}
+
+function clearFileSelection() {
+	userFileInput.value = "";
+	clearPreview();
 }
