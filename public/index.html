@@ -474,23 +474,26 @@
     
     async function processImage() {
       if (!selectedFile) return;
-      
+
       const button = document.getElementById('sendButton');
       button.disabled = true;
-      
+
+      // Save reference to file before clearing
+      const fileToUpload = selectedFile;
+
       // Add user message with image
       const reader = new FileReader();
       reader.onload = (e) => {
         addMessage('user', 'Create an event from this image:', e.target.result);
       };
-      reader.readAsDataURL(selectedFile);
-      
+      reader.readAsDataURL(fileToUpload);
+
       // Clear preview
       removePreview();
-      
+
       // Create form data
       const formData = new FormData();
-      formData.append('image', selectedFile);
+      formData.append('image', fileToUpload);
       formData.append('timezone', Intl.DateTimeFormat().resolvedOptions().timeZone);
       
       try {
@@ -523,6 +526,7 @@
           }
         }
       } catch (error) {
+        // TODO: Change to basic Error Message and log `error.message` to console.error instead.
         removeStatus();
         addMessage('assistant', `❌ Error: ${error.message}`);
       }
@@ -554,6 +558,7 @@
           showSuccess(data.result);
           break;
         case 'error':
+          // TODO: Change to a basic Error Message and log `error.message` to console.error instead.
           addMessage('assistant', `❌ ${data.error}`);
           break;
       }

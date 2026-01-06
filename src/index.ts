@@ -39,19 +39,22 @@ export default {
       switch (url.pathname) {
         case '/api/process-image':
           return handleProcessImage(request, env);
-        
+
         case '/api/workflow-status':
           return handleWorkflowStatus(request, env);
-        
+
         case '/api/chat':
           return handleChat(request, env);
-        
+
         case '/api/auth/google':
           return handleGoogleAuth(request, env);
-        
+
         case '/api/auth/google/callback':
           return handleGoogleCallback(request, env);
-        
+
+        case '/api/accept-llama-license':
+          return handleAcceptLlamaLicense(request, env);
+
         default:
           // Serve static assets or return 404
           return new Response('Not Found', { status: 404, headers: corsHeaders });
@@ -79,10 +82,27 @@ async function handleProcessImage(request: Request, env: Env): Promise<Response>
     return new Response('Method not allowed', { status: 405 });
   }
 
+  // Get user ID from session cookie
+  const cookieHeader = request.headers.get('Cookie') || '';
+  const sessionMatch = cookieHeader.match(/session=([^;]+)/);
+  let userId = 'anonymous';
+
+  if (sessionMatch) {
+    const sessionId = sessionMatch[1];
+    const storedUserId = await env.SESSION_KV.get(`session:${sessionId}`);
+    if (storedUserId) {
+      userId = storedUserId;
+      console.log('[Auth] User authenticated:', userId);
+    } else {
+      console.log('[Auth] Session not found or expired');
+    }
+  } else {
+    console.log('[Auth] No session cookie found');
+  }
+
   const formData = await request.formData();
   const imageFile = formData.get('image') as File | null;
   const timezone = (formData.get('timezone') as string) || env.DEFAULT_TIMEZONE;
-  const userId = (formData.get('userId') as string) || 'anonymous';
 
   if (!imageFile) {
     return new Response(
@@ -103,7 +123,7 @@ async function handleProcessImage(request: Request, env: Env): Promise<Response>
   // Generate unique key and store image in R2
   const imageKey = `images/${crypto.randomUUID()}.${imageFile.type.split('/')[1]}`;
   const imageBuffer = await imageFile.arrayBuffer();
-  
+
   await env.IMAGES.put(imageKey, imageBuffer, {
     httpMetadata: { contentType: imageFile.type },
   });
@@ -144,7 +164,14 @@ async function streamWorkflowProgress(
   env: Env
 ): Promise<void> {
   const sendEvent = async (data: object) => {
-    await writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+    try {
+      const jsonString = JSON.stringify(data);
+      await writer.write(encoder.encode(`data: ${jsonString}\n\n`));
+    } catch (err) {
+      console.error('Failed to send SSE event:', err, data);
+      // Send a safe error message instead
+      await writer.write(encoder.encode(`data: ${JSON.stringify({ step: 'error', error: 'Internal error' })}\n\n`));
+    }
   };
 
   try {
@@ -152,32 +179,41 @@ async function streamWorkflowProgress(
 
     // Poll for workflow status
     let status = await instance.status();
-    
+
     while (status.status === 'running') {
-      await sendEvent({ 
-        step: 'processing', 
+      await sendEvent({
+        step: 'processing',
         message: 'Processing your image...',
-        status: status.status 
+        status: status.status
       });
-      
+
       // Wait before polling again
       await new Promise(resolve => setTimeout(resolve, 1000));
       status = await instance.status();
     }
 
     if (status.status === 'complete') {
+      console.log('Workflow complete, output:', status.output);
       await sendEvent({
         step: 'complete',
         result: status.output,
       });
     } else {
+      console.error('Workflow failed:', status.error);
+      // Safely handle error messages that might contain problematic characters
+      const errorMessage = typeof status.error === 'string'
+        ? status.error
+        : JSON.stringify(status.error) || 'Workflow failed';
+
       await sendEvent({
         step: 'error',
-        error: status.error || 'Workflow failed',
+        error: errorMessage,
       });
     }
   } catch (error) {
-    await sendEvent({ step: 'error', error: String(error) });
+    console.error('Stream error:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await sendEvent({ step: 'error', error: errorMessage });
   } finally {
     await writer.close();
   }
@@ -351,6 +387,40 @@ async function handleGoogleCallback(request: Request, env: Env): Promise<Respons
     VALUES (?, ?, ?, ?)
   `).bind(userId, tokens.access_token, tokens.refresh_token || '', expiresAt).run();
 
-  // Redirect back to app
-  return Response.redirect(`${url.origin}/?auth=success`, 302);
+  // Create a session and store user ID in KV
+  const sessionId = crypto.randomUUID();
+  await env.SESSION_KV.put(`session:${sessionId}`, userId, { expirationTtl: 86400 * 7 }); // 7 days
+
+  // Redirect back to app with session cookie
+  return new Response(null, {
+    status: 302,
+    headers: {
+      'Location': `${url.origin}/?auth=success`,
+      'Set-Cookie': `session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${86400 * 7}`,
+    },
+  });
+}
+
+/**
+ * GET /api/accept-llama-license
+ * One-time endpoint to accept Llama 3.2 license
+ */
+async function handleAcceptLlamaLicense(request: Request, env: Env): Promise<Response> {
+  try {
+    console.log('Accepting Llama 3.2 license...');
+    const result = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+      prompt: 'agree'
+    });
+    console.log('License accepted!', result);
+    return new Response(
+      JSON.stringify({ success: true, message: 'Llama 3.2 license accepted!' }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Failed to accept license:', error);
+    return new Response(
+      JSON.stringify({ error: 'Failed to accept license', details: String(error) }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
 }

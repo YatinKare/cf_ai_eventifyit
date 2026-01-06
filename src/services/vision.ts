@@ -62,43 +62,46 @@ export async function extractEventFromImage(
 ): Promise<RawEventData> {
   // Convert ArrayBuffer to Uint8Array for the AI model
   const imageArray = Array.from(new Uint8Array(imageBytes));
-  
-  console.log('[Vision] Calling Llama 3.2 Vision model...');
-  
-  // Call the vision model
-  // Using Llama 3.2 11B Vision Instruct - it's great for image understanding
-  const response = await ai.run(
-    '@cf/meta/llama-3.2-11b-vision-instruct',
-    {
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              image: imageArray,
-            },
-            {
-              type: 'text',
-              text: EXTRACTION_PROMPT,
-            },
-          ],
-        },
-      ],
-      max_tokens: 1000,
-      temperature: 0.1, // Low temperature for more consistent JSON output
-    }
-  );
 
-  console.log('[Vision] Raw response:', response);
+  console.log('[Vision] Calling LLaVA 1.5 7B model...');
+  console.log('[Vision] Image array length:', imageArray.length);
+  console.log('[Vision] Preparing model request...');
 
-  // Extract the response text
-  const responseText = typeof response === 'object' && 'response' in response
-    ? (response as { response: string }).response
-    : String(response);
+  try {
+    // Call the vision model
+    // Using LLaVA 1.5 7B - great for image understanding and extraction
+    const response = await ai.run(
+      '@cf/llava-hf/llava-1.5-7b-hf',
+      {
+        image: imageArray,  // Array of numbers (0-255)
+        prompt: EXTRACTION_PROMPT,
+        max_tokens: 1000,
+        temperature: 0.1,  // Low temperature for more consistent JSON output
+      }
+    );
 
-  // Parse the JSON from the response
-  return parseEventJson(responseText);
+    console.log('[Vision] LLaVA model call completed successfully');
+    console.log('[Vision] Response type:', typeof response);
+    console.log('[Vision] Raw response:', response);
+
+    // Extract the response text
+    console.log('[Vision] Extracting response text...');
+    const responseText = typeof response === 'object' && 'description' in response
+      ? (response as { description: string }).description
+      : String(response);
+
+    console.log('[Vision] Response text:', responseText.substring(0, 200));
+
+    // Parse the JSON from the response
+    console.log('[Vision] Parsing JSON...');
+    const result = parseEventJson(responseText);
+    console.log('[Vision] Parsed result:', JSON.stringify(result));
+    return result;
+  } catch (error) {
+    console.error('[Vision] Error calling vision model:', error);
+    console.error('[Vision] Error details:', JSON.stringify(error, null, 2));
+    throw new Error(`Vision model failed: ${error}`);
+  }
 }
 
 /**
@@ -106,33 +109,43 @@ export async function extractEventFromImage(
  * Handles various edge cases where the model might not return clean JSON
  */
 function parseEventJson(responseText: string): RawEventData {
+  console.log('[Parse] Starting JSON parse, input length:', responseText.length);
+
   // Try to extract JSON from the response
   let jsonString = responseText.trim();
-  
+
+  // Clean up escaped underscores (\_) which are not valid JSON
+  jsonString = jsonString.replace(/\\_/g, '_');
+
   // Sometimes the model wraps JSON in markdown code blocks
   const jsonMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   if (jsonMatch) {
+    console.log('[Parse] Found JSON in markdown code block');
     jsonString = jsonMatch[1].trim();
   }
-  
+
   // Try to find JSON object in the response
   const jsonObjectMatch = jsonString.match(/\{[\s\S]*\}/);
   if (jsonObjectMatch) {
+    console.log('[Parse] Extracted JSON object from response');
     jsonString = jsonObjectMatch[0];
   }
 
+  console.log('[Parse] Attempting to parse:', jsonString.substring(0, 200));
+
   try {
     const parsed = JSON.parse(jsonString);
-    
+    console.log('[Parse] Successfully parsed JSON');
+
     // Store the raw text for debugging
     return {
       ...parsed,
       raw_text: responseText.substring(0, 500), // Store first 500 chars
     };
   } catch (error) {
-    console.error('[Vision] Failed to parse JSON:', error);
-    console.error('[Vision] Response was:', responseText);
-    
+    console.error('[Parse] Failed to parse JSON:', error);
+    console.error('[Parse] Response was:', responseText);
+
     // Return a minimal object if parsing fails
     return {
       title: 'Unknown Event',

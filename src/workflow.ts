@@ -66,20 +66,20 @@ export class EventifyWorkflow extends WorkflowEntrypoint<Env, WorkflowParams> {
     // ----------------------------------------
     const rawEventData = await step.do('extract-event-data', async () => {
       console.log('[Step 1] Extracting event data from image...');
-      
+
       // Fetch image from R2
       const imageObject = await this.env.IMAGES.get(imageKey);
       if (!imageObject) {
         throw new Error(`Image not found: ${imageKey}`);
       }
-      
+
       const imageBytes = await imageObject.arrayBuffer();
       console.log(`[Step 1] Image size: ${imageBytes.byteLength} bytes`);
-      
+
       // Use Vision AI to extract event details
       const extracted = await extractEventFromImage(this.env.AI, imageBytes);
       console.log('[Step 1] Extracted data:', JSON.stringify(extracted));
-      
+
       return extracted;
     });
 
