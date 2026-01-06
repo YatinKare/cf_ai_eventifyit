@@ -59,11 +59,17 @@ async function handleChatRequest(
 	env: Env,
 ): Promise<Response> {
 	try {
-		const { messages: incomingMessages, uploadedFileNames } =
+		const { messages: incomingMessages, uploadedFiles } =
 			await parseChatRequestPayload(request);
 		const messages = [...incomingMessages];
-		if (uploadedFileNames.length > 0) {
-			console.log("Received files from frontend:", uploadedFileNames);
+		const storedFiles = await storeUploadedImages(env, uploadedFiles);
+		if (storedFiles.length > 0) {
+			console.log(
+				"Stored files in R2:",
+				storedFiles.map(
+					(file) => `${file.originalName} -> ${file.objectKey}`,
+				),
+			);
 		}
 
 		// Add system prompt if not present
@@ -92,18 +98,18 @@ async function handleChatRequest(
 
 async function parseChatRequestPayload(
 	request: Request,
-): Promise<{ messages: ChatMessage[]; uploadedFileNames: string[] }> {
+): Promise<{ messages: ChatMessage[]; uploadedFiles: File[] }> {
 	const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
 	if (contentType.includes("multipart/form-data")) {
 		const formData = await request.formData();
 		const formMessages = parseMessagesPayload(formData.get("messages"));
-		const uploadedFileNames: string[] = [];
+		const uploadedFiles: File[] = [];
 		for (const [, value] of formData.entries()) {
 			if (value instanceof File && value.name) {
-				uploadedFileNames.push(value.name);
+				uploadedFiles.push(value);
 			}
 		}
-		return { messages: formMessages, uploadedFileNames };
+		return { messages: formMessages, uploadedFiles };
 	}
 
 	if (contentType.includes("application/json") || contentType === "") {
@@ -113,15 +119,15 @@ async function parseChatRequestPayload(
 			};
 			return {
 				messages: Array.isArray(messages) ? messages : [],
-				uploadedFileNames: [],
+				uploadedFiles: [],
 			};
 		} catch (error) {
 			console.error("Failed to parse JSON request body:", error);
-			return { messages: [], uploadedFileNames: [] };
+			return { messages: [], uploadedFiles: [] };
 		}
 	}
 
-	return { messages: [], uploadedFileNames: [] };
+	return { messages: [], uploadedFiles: [] };
 }
 
 function parseMessagesPayload(rawValue: FormDataEntryValue | null): ChatMessage[] {
@@ -135,4 +141,38 @@ function parseMessagesPayload(rawValue: FormDataEntryValue | null): ChatMessage[
 		}
 	}
 	return [];
+}
+
+async function storeUploadedImages(
+	env: Env,
+	files: File[],
+): Promise<{ originalName: string; objectKey: string }[]> {
+	const bucket = env.eventifyit_images;
+	if (!bucket || typeof bucket.put !== "function") {
+		console.warn(
+			"eventifyit_images binding is not configured; skipping upload of",
+			files.length,
+			"file(s).",
+		);
+		return [];
+	}
+
+	const storedFiles: { originalName: string; objectKey: string }[] = [];
+	for (const file of files) {
+		if (!file.type.startsWith("image/")) {
+			console.warn(`Skipping non-image upload: ${file.name || "unknown"}`);
+			continue;
+		}
+
+		const [, extension = "bin"] = file.type.split("/");
+		const objectKey = `images/${crypto.randomUUID()}.${extension}`;
+		const imageBuffer = await file.arrayBuffer();
+
+		await bucket.put(objectKey, imageBuffer, {
+			httpMetadata: { contentType: file.type },
+		});
+
+		storedFiles.push({ originalName: file.name, objectKey });
+	}
+	return storedFiles;
 }

@@ -26,6 +26,11 @@ export interface Env {
 	 * Workflow binding stub (see wrangler.jsonc `workflows` config).
 	 */
 	"main-workflow": WorkflowBinding;
+
+	/**
+	 * Binding for R2 bucket used to store uploaded images.
+	 */
+	eventifyit_images: R2Bucket;
 }
 
 /**
