@@ -1,12 +1,12 @@
-# LLM Chat Application Template
+# EventifyIt
 
-A simple, ready-to-deploy chat application template powered by Cloudflare Workers AI. This template provides a clean starting point for building AI chat applications with streaming responses.
-
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/templates/tree/main/llm-chat-app-template)
+An Image-to-Google Calendar event/task parser using an AI chat, built on Cloudflare.
 
 <!-- dash-content-start -->
 
-## Demo
+## Background
+
+EventifyIt is an intelligent image-to-calendar tool that uses AI to automatically extract event information from images (like flyers, posters, or handwritten notes) and add them directly to your Google Calendar with a single click.
 
 This template demonstrates how to build an AI-powered chat interface using Cloudflare Workers AI with streaming responses. It features:
 
@@ -15,15 +15,34 @@ This template demonstrates how to build an AI-powered chat interface using Cloud
 - Support for AI Gateway integration
 - Clean, responsive UI that works on mobile and desktop
 
+## The Problem
+
+As a university student and developer, keeping track of events, to-do lists, flyers, and physical media in Google Calendar is tedious. The current workflow requires:
+- Taking pictures of physical media or carrying them until you reach your device
+- Manually reading and extracting event details
+- Opening Google Calendar and entering all information by hand
+
+This process is time-consuming and prone to errors or procrastination.
+
+## The Solution
+
+EventifyIt streamlines this entire workflow into a simple process:
+1. Upload an image of your event (flyer, poster, note, etc.)
+2. AI automatically extracts all event details (title, date, time, location, description)
+3. Receive a one-click calendar invite to add the event
+
+**Value Proposition**: From anywhere in the world, add anything to your Google Calendar without manual data entry, saving time and effort so you can focus on doing things instead of planning them.
+
 ## Features
 
-- 💬 Simple and responsive chat interface
-- ⚡ Server-Sent Events (SSE) for streaming responses
-- 🧠 Powered by Cloudflare Workers AI LLMs
-- 🛠️ Built with TypeScript and Cloudflare Workers
-- 📱 Mobile-friendly design
-- 🔄 Maintains chat history on the client
-- 🔎 Built-in Observability logging
+- 🔍 **OCR for event images** - Automatically extracts event details from flyers and photos using Workers AI
+- 📅 **Smart date/time parsing** - Supports timezones, all-day events, and automatic duration detection
+- 📆 **One-click Google Calendar** - Seamless OAuth integration with conflict detection
+- 🔄 **Cloudflare infrastructure** - Built on Workers, Workflows, D1, R2, and KV for reliability
+- ⚡ **Real-time SSE streaming** - Live progress updates as your event is processed
+- 📱 **Mobile-friendly design** - Upload and create events from anywhere
+- 🛡️ **Robust error handling** - Retry logic and timeout management for API reliability
+
 <!-- dash-content-end -->
 
 ## Getting Started
@@ -171,68 +190,55 @@ npm wrangler tail
 
 ```
 /
-├── public/             # Static assets
-│   ├── index.html      # Chat UI HTML
-│   └── chat.js         # Chat UI frontend script
+├── public/                  # Static assets
+│   └── index.html           # EventifyIt UI (chat interface + image upload)
 ├── src/
-│   ├── index.ts        # Main Worker entry point
-│   └── types.ts        # TypeScript type definitions
-├── test/               # Test files
-├── wrangler.jsonc      # Cloudflare Worker configuration
-├── tsconfig.json       # TypeScript configuration
-└── README.md           # This documentation
+│   ├── index.ts             # Main Worker entry point with API routes
+│   ├── workflow.ts          # Cloudflare Workflows orchestration
+│   ├── types.ts             # TypeScript type definitions
+│   └── services/
+│       ├── vision.ts        # LLaVA AI vision model integration
+│       ├── validation.ts    # Event data validation and normalization
+│       └── calendar.ts      # Google Calendar API integration
+├── wrangler.jsonc           # Cloudflare Worker configuration (D1, R2, KV, Workflows)
+├── .dev.vars                # Local development secrets (gitignored)
+├── tsconfig.json            # TypeScript configuration
+└── README.md                # This documentation
 ```
 
 ## How It Works
 
-### Backend
+### Architecture
 
-The backend is built with Cloudflare Workers and uses the Workers AI platform to generate responses. The main components are:
+EventifyIt uses Cloudflare's serverless infrastructure to process images and create calendar events:
 
-1. **API Endpoint** (`/api/chat`): Accepts POST requests with chat messages and streams responses
-2. **Streaming**: Uses Server-Sent Events (SSE) for real-time streaming of AI responses
-3. **Workers AI Binding**: Connects to Cloudflare's AI service via the Workers AI binding
+1. **Image Upload** → User uploads an event image through the web interface
+2. **R2 Storage** → Image is stored in Cloudflare R2 bucket
+3. **Workflow Triggered** → Cloudflare Workflows orchestrates the processing pipeline
+4. **Vision AI** → LLaVA 1.5 7B model extracts event details from the image
+5. **Validation** → Event data is validated and normalized with timezone support
+6. **Conflict Check** → D1 database is queried for scheduling conflicts
+7. **Calendar Creation** → Google Calendar API creates the event with OAuth tokens from D1
+8. **SSE Streaming** → Real-time progress updates sent to the frontend
 
-### Frontend
+### Key Components
 
-The frontend is a simple HTML/CSS/JavaScript application that:
+**API Routes** (`src/index.ts`):
+- `/api/process-image` - Handles image uploads and initiates workflows
+- `/api/auth/google` - OAuth flow for Google Calendar authorization
+- `/api/workflow-status` - Query workflow execution status
 
-1. Presents a chat interface
-2. Sends user messages to the API
-3. Processes streaming responses in real-time
-4. Maintains chat history on the client side
+**Cloudflare Workflows** (`src/workflow.ts`):
+- Durable execution with automatic retries
+- Step-by-step processing: Extract → Validate → Check Conflicts → Create Event
+- State persistence across steps
 
-## Customization
+**Services**:
+- `vision.ts` - OCR and event extraction using Workers AI
+- `validation.ts` - Date/time parsing and event normalization
+- `calendar.ts` - Google Calendar API integration with token management
 
-### Changing the Model
-
-To use a different AI model, update the `MODEL_ID` constant in `src/index.ts`. You can find available models in the [Cloudflare Workers AI documentation](https://developers.cloudflare.com/workers-ai/models/).
-
-### Using AI Gateway
-
-The template includes commented code for AI Gateway integration, which provides additional capabilities like rate limiting, caching, and analytics.
-
-To enable AI Gateway:
-
-1. [Create an AI Gateway](https://dash.cloudflare.com/?to=/:account/ai/ai-gateway) in your Cloudflare dashboard
-2. Uncomment the gateway configuration in `src/index.ts`
-3. Replace `YOUR_GATEWAY_ID` with your actual AI Gateway ID
-4. Configure other gateway options as needed:
-   - `skipCache`: Set to `true` to bypass gateway caching
-   - `cacheTtl`: Set the cache time-to-live in seconds
-
-Learn more about [AI Gateway](https://developers.cloudflare.com/ai-gateway/).
-
-### Modifying the System Prompt
-
-The default system prompt can be changed by updating the `SYSTEM_PROMPT` constant in `src/index.ts`.
-
-### Styling
-
-The UI styling is contained in the `<style>` section of `public/index.html`. You can modify the CSS variables at the top to quickly change the color scheme.
-
-## Resources
-
-- [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)
-- [Cloudflare Workers AI Documentation](https://developers.cloudflare.com/workers-ai/)
-- [Workers AI Models](https://developers.cloudflare.com/workers-ai/models/)
+**Data Storage**:
+- **D1** - User tokens and event records
+- **R2** - Temporary image storage
+- **KV** - Session management (HttpOnly cookies)
