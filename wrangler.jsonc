@@ -1,22 +1,129 @@
-/**
- * For more details on how to configure Wrangler, refer to:
- * https://developers.cloudflare.com/workers/wrangler/configuration/
- */
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "cf-ai-eventifyit",
-	"main": "src/index.ts",
-	"compatibility_date": "2025-10-08",
-	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-	"assets": {
-		"binding": "ASSETS",
-		"directory": "./public"
-	},
-	"observability": {
-		"enabled": true
-	},
-	"ai": {
-		"binding": "AI"
-	},
-	"upload_source_maps": true
+  // EventifyIt on Cloudflare - Wrangler Configuration
+  // Docs: https://developers.cloudflare.com/workers/wrangler/configuration/
+
+  "name": "eventifyit",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // ============================================
+  // WORKERS AI BINDING
+  // For Llama 3.2 Vision and text models
+  // ============================================
+  "ai": {
+    "binding": "AI",
+    "remote": true
+  },
+
+  // ============================================
+  // CLOUDFLARE WORKFLOWS
+  // Durable execution for the processing pipeline
+  // ============================================
+  "workflows": [
+    {
+      "name": "eventify-workflow",
+      "binding": "EVENTIFY_WORKFLOW",
+      "class_name": "EventifyWorkflow"
+    }
+  ],
+
+  // ============================================
+  // KV NAMESPACES
+  // Fast key-value storage for sessions & cache
+  // ============================================
+  // Create with: wrangler kv:namespace create SESSION_KV
+  "kv_namespaces": [
+    {
+      "binding": "SESSION_KV",
+      "id": "d71a80cf8af643beb3bc35bf6fffd029",
+      "remote": true
+      // Preview ID for local development:
+      // "preview_id": "YOUR_PREVIEW_KV_ID_HERE"
+    }
+  ],
+
+  // ============================================
+  // D1 DATABASE
+  // SQLite database for persistent storage
+  // ============================================
+  // Create with: wrangler d1 create eventifyit-db
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "eventifyit-db",
+      "database_id": "f5bbaed3-4519-49d6-9e45-d011dfb2a8ff",
+      "remote": true
+    }
+  ],
+
+  // ============================================
+  // R2 BUCKET
+  // Object storage for uploaded images
+  // ============================================
+  // Create with: wrangler r2 bucket create eventifyit-images
+  "r2_buckets": [
+    {
+      "binding": "IMAGES",
+      "bucket_name": "eventifyit-images",
+      "remote": true
+    }
+  ],
+
+  // ============================================
+  // ENVIRONMENT VARIABLES
+  // Non-sensitive configuration
+  // ============================================
+  "vars": {
+    "DEFAULT_TIMEZONE": "America/New_York",
+    "GOOGLE_CLIENT_ID": "970572423590-fq9h4s1gfamokip8n4bom69enjk52pv4.apps.googleusercontent.com"
+    // Note: GOOGLE_CLIENT_SECRET should be set as a secret, not here
+  },
+
+  // ============================================
+  // STATIC ASSETS
+  // Serve the chat UI from /public
+  // ============================================
+  "assets": {
+    "directory": "./public"
+  },
+
+  // ============================================
+  // OBSERVABILITY
+  // Enable logging for debugging
+  // ============================================
+  "observability": {
+    "enabled": true
+  },
+
+  // ============================================
+  // DEVELOPMENT SETTINGS
+  // ============================================
+  "dev": {
+    "port": 8787,
+    "local_protocol": "http"
+  }
 }
+
+// ============================================
+// SETUP INSTRUCTIONS
+// ============================================
+// 
+// 1. Create resources:
+//    wrangler kv:namespace create SESSION_KV
+//    wrangler d1 create eventifyit-db
+//    wrangler r2 bucket create eventifyit-images
+//
+// 2. Update IDs in this file with the values from step 1
+//
+// 3. Set secrets:
+//    wrangler secret put GOOGLE_CLIENT_SECRET
+//    wrangler secret put ENCRYPTION_KEY  (optional, for token encryption)
+//
+// 4. Run database migration:
+//    wrangler d1 execute eventifyit-db --file=./schema.sql
+//
+// 5. Deploy:
+//    npm run deploy
+//
+// ============================================

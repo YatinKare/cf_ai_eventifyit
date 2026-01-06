@@ -200,3 +200,12 @@ dist
 
 ### Codex Chats ###
 .codex-chats
+
+### User Documentation ###
+.user_documentation
+
+### Old Wrangler.jsonc ###
+wrangler-old.jsonc
+
+### Goolge Secrets ###
+.secrets/
