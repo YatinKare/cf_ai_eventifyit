@@ -32,5 +32,9 @@
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
 		"test": "vitest"
+	},
+	"dependencies": {
+		"hono": "^4.11.3",
+		"zod": "^4.3.5"
 	}
 }
